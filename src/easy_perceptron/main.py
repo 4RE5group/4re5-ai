@@ -1,32 +1,44 @@
 import random
+from PIL import Image, ImageDraw
 
-def activation(neurones, entrees):
-    """
-    Programmer une fonction activation(neurone,entree) qui selon
-    l’état de neurone = [p1,p2,p3] et les valeurs entree = [e1,e2,e3]
-    renvoie s = 1 en cas d’activation et s = 0 sinon.
-     s = 1            si           p1e1 + p2e2 + p3e3 ≥ 1
-               s = 0            sinon.
-    """
-    s = sum(neurones[i] * entrees[i] for i in range(len(neurones)))
-    return 1 if s >= 1 else 0
+image = Image.new('RGB', (200, 200), 'white')
+draw = ImageDraw.Draw(image)
 
-def apprentissage(neurones, entree, objectif):
+epsilon = 0.2
+
+def activation(neuron: list, entry: list) -> int:
     """
-    renvoie l’état [p’1, p’2, p’3 ] ] modiﬁé du neurone après apprentissage
-    avec l’entrée et l’objectif (0 ou 1) donné.
+    returns the state of the neuron (0 or 1) after applying the activation function
     """
-    s = activation(neurones, entree)
-    if s == objectif:
-        return neurones
-    else:
-        epsilon = 0.2
-        for i in range(len(neurones)):
-            if s == 0 and objectif == 1:
-                neurones[i] += epsilon * entree[i]
-            elif s == 1 and objectif == 0:
-                neurones[i] -= epsilon * entree[i]
-        return neurones
+    s = 0
+    for i in range(len(neuron)):
+        s += neuron[i] * entry[i]
+
+    if  s >= 1 :
+        return 1
+    else :
+        return 0
+
+def single_epoque_learning(neuron, entry, objective) :
+    """
+    returns the state of [p'1, p'2, p'3 ] edited by the learning function
+    with the entry and the objective
+    """
+
+    ret = [0]*len(neuron)
+
+    s = activation(neuron,entry)
+    for i in range(len(neuron)):
+        if s == objective:
+            return neuron
+        elif s==0 and objective == 1:
+            ret[i] = neuron[i] + epsilon * entry[i]
+        elif s==1 and objective == 0:
+            ret[i] = neuron[i] - epsilon * entry[i]
+    
+    return ret
+
+
 
 def get_random_colors(n):
     return [(random.randint(0, 255) / 255, random.randint(0, 255) / 255, random.randint(0, 255) / 255) for _ in range(n)]
@@ -36,28 +48,94 @@ def generate_color(n):
     for _ in range(n):
         c = get_random_colors(1)[0]
         g = list(c)
-        if c[0] > 200 / 255:  # Normalize the comparison value
+        if c[0] > (180/255) and c[1] < (60/255) and c[2] < (60/255):  # mostly red
             l.append((1, g))
         else:
             l.append((0, g))
     return l
 
-def train(neurones, obj):
-    for objectif, entree in obj:
-        neurones = apprentissage(neurones, entree, objectif)
-    return neurones
+def test_colors(neurons, colors):
+    l = 0
+    c = 0
+    errorRateCount = False
+    errorRate = 0
 
-neurones = [1, 1, 1]
-entrees = generate_color(200)
-data = train(neurones, entrees)
 
-# utilise le perceptron sens inverse
-r=255
-g=255
-b=255
-color = [r/255, g/255, b/255]
-s = activation(data, color)
-if s==1:
-    print(f"color {r},{g},{b} is a redish color")
-else:
-    print(f"color {r},{g},{b} isnt a redish color")
+    if type(colors[0]) == tuple and len(colors[0]) == 2:
+        # need to check the error rate
+        errorRateCount = True
+
+    # just display the colors guesses
+    for elem in colors:
+        if errorRateCount:
+            color = elem[1]
+            objTest = elem[0]
+        else:
+            color = elem
+
+        # Ensure color is a list or tuple with three elements
+        # if isinstance(color, (list, tuple)) and len(color) == 3:
+        #     r, g, b = color
+        # else:
+        #     continue  # Skip if color is not in the expected format
+        r, g, b = color
+
+        s = activation(neurons, color)
+        # count errors
+        if errorRateCount and s!=objTest:
+            errorRate+=1
+        
+
+        if s == 1:
+            # success
+            draw.rectangle([(l*20, c*20), ((l+1)*20, (c+1)*20)], fill=(int(r*255), int(g*255), int(b*255)), outline="green")
+            draw.line([(l*20, c*20), ((l+1)*20, (c+1)*20)], fill="green", width=2)
+        else:
+            draw.rectangle([(l*20, c*20), ((l+1)*20, (c+1)*20)], fill=(int(r*255), int(g*255), int(b*255)), outline="red")
+
+        l += 1
+        if l >= 200/20:
+            l = 0
+            c += 1
+        if c >= 200/20:
+            break
+
+    if errorRateCount:
+        entryTotal = len(colors)
+        print("error rate: ")
+        print(" valid:", entryTotal-errorRate)
+        print(" errors:", errorRate)
+        print(f"total: {entryTotal}  success rate: ~{((entryTotal-errorRate)/entryTotal)*100}%")
+    image.show()
+
+def train(neurons, entries, n=10):
+    """
+    trains the neuron with the entries
+    """
+    for _ in range(n):
+        for entry, objective in entries:
+            neurons = single_epoque_learning(neurons, entry, objective)
+    return neurons
+
+
+
+
+
+
+
+entry_objectives = [
+([1,0,0],1), ([0,1,1],0), ([1,1,0],0),
+([1,0,0.2],1), ([0,1,0],0), ([0,0,0],0),
+([1,0,1],0), ([0.7,0,0],1), ([0.5,0.5,0.5],0),
+([0.9,0.2,0],1), ([0.9,0,0],1), ([1,1,1],0),
+([0.2,1,0],0), ([0.8,0.2,0],1), ([0.7,0.1,0.1],1) ]
+
+neuron  = [1,1,1]   #initialisation
+
+# train the neuron
+neuron = train(neuron, entry_objectives, n=1000)
+
+
+# test colors
+list_rgb = generate_color(100)
+test_colors(neuron, list_rgb)
